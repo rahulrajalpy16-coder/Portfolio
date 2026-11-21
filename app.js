@@ -388,62 +388,41 @@ const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
       window.scrollTo({ top: r.top + scrollY + pOf(T) * (r.height - vh), behavior: 'smooth' });
     }));
 
-    /* ---- pages hold: you scroll and swipe freely through the tesseract, the movement follows your finger or wheel,
-       but every page is a wall for the gesture that reaches it. When a page fills the screen (T = k + .5) the scroll
-       stops right there, even mid-fling, and only a new swipe or scroll carries you on to the next page. */
-    (function holds() {
-      const root = document.documentElement;
-      const yOf = T => { const r = tess.getBoundingClientRect(); return r.top + scrollY + pOf(T) * (r.height - vh); };
-      const pages = () => sts.map((_, k) => yOf(k + .5));
-      let lo = -Infinity, hi = Infinity, lastWheel = 0, touchMode = false, freezing = false;
-      // the walls for the gesture that starts now: the nearest page ahead in each direction
-      function arm() {
-        const y = scrollY, ps = pages();
-        hi = Infinity; lo = -Infinity;
-        for (const v of ps) { if (v > y + 2) { hi = v; break; } }
-        for (let i = ps.length - 1; i >= 0; i--) if (ps[i] < y - 2) { lo = ps[i]; break; }
+    /* ---- a moment on every page ----
+       Scrolling works exactly as before: the camera follows your scroll. The only addition is a pause in the picture,
+       not in the scroll: when the camera reaches a page (it fills the screen at T = k + .5) it rests there for HOLD ms,
+       then smoothly catches up with wherever you have scrolled to. Nothing ever fights your finger or wheel,
+       so there is nothing to blink. A click on a room button or a link jumps straight there without stopping. */
+    const HOLD = 1500;
+    let Tv = null, holdUntil = 0, lastNow = 0, skipHolds = false;
+    const held = new Set();
+    const again = () => requestAnimationFrame(() => markDirty());
+    addEventListener('click', () => { skipHolds = true; holdUntil = 0; }, true);
+    function visT(T) {
+      const now = performance.now(), dt = Math.min(.1, lastNow ? (now - lastNow) / 1000 : 0); lastNow = now;
+      if (Tv === null) { Tv = T; return T; }
+      if (now < holdUntil) { again(); return Tv; }
+      const gap = T - Tv;
+      if (Math.abs(gap) < .0005) { Tv = T; skipHolds = false; }
+      else {
+        // ease toward the scroll position, never slower than about two rooms a second
+        const mag = Math.min(Math.abs(gap), Math.max(Math.abs(gap) * (1 - Math.exp(-7 * dt)), 2.2 * dt));
+        const nT = Tv + Math.sign(gap) * mag;
+        if (!skipHolds) {
+          const lo = Math.min(Tv, nT), hi = Math.max(Tv, nT);
+          for (let k = 0; k < NST; k++) {
+            const at = k + .5;
+            if (at > lo + 1e-6 && at <= hi + 1e-6 && !held.has(k)) { Tv = at; held.add(k); holdUntil = now + HOLD; again(); return Tv; }
+          }
+        }
+        Tv = nT; again();
       }
-      const free = () => { lo = -Infinity; hi = Infinity; };
-      // hold exactly on a page; on iPhone, briefly switching scrolling off also kills the fling's coast
-      function hold(v) {
-        if (touchMode) {
-          freezing = true;
-          root.style.overflow = 'hidden'; document.body.style.overflow = 'hidden';
-          window.scrollTo(0, v);
-          requestAnimationFrame(() => requestAnimationFrame(() => { root.style.overflow = ''; document.body.style.overflow = ''; window.scrollTo(0, v); freezing = false; }));
-        } else window.scrollTo(0, v);
-      }
-      addEventListener('scroll', () => {
-        if (freezing) return;
-        const y = scrollY;
-        if (y > hi + 1) hold(hi); else if (y < lo - 1) hold(lo);
-      }, { passive: true });
-      addEventListener('wheel', e => {
-        if (e.ctrlKey) return;
-        const now = performance.now();
-        if (now - lastWheel > 220) arm();                                // a fresh flick is a new gesture
-        lastWheel = now;
-        const y = scrollY, d = e.deltaY;
-        // pushing against the wall of this gesture: stay on the page
-        if ((d > 0 && y >= hi - 1) || (d < 0 && y <= lo + 1)) { e.preventDefault(); return; }
-        if (d > 0 && y + d > hi) { e.preventDefault(); hold(hi); }
-        else if (d < 0 && y + d < lo) { e.preventDefault(); hold(lo); }
-      }, { passive: false });
-      let tY = null;
-      addEventListener('touchstart', e => { touchMode = true; tY = e.touches[0].clientY; arm(); }, { passive: true });
-      addEventListener('touchmove', e => {
-        if (tY == null) return;
-        const dy = tY - e.touches[0].clientY, y = scrollY;
-        // finger still pushing into the page that just filled the screen: the page does not move
-        if ((dy > 0 && y >= hi - 1) || (dy < 0 && y <= lo + 1)) { if (e.cancelable) e.preventDefault(); }
-      }, { passive: false });
-      addEventListener('touchend', () => { tY = null; }, { passive: true });
-      addEventListener('keydown', e => { if (/^(Arrow(Up|Down)|Page(Up|Down)| |Home|End)$/.test(e.key)) arm(); });
-      addEventListener('click', free, true);                            // links and room buttons jump freely
-    })();
+      held.forEach(k => { if (Math.abs(Tv - (k + .5)) > .6) held.delete(k); });   // leave a page and it will pause again next time
+      return Tv;
+    }
 
     scene(tess, p => {
-      const T = p * U - PRE;
+      const T = visT(p * U - PRE);
       const q = range(T, TC, TC + PC), s = range(T, TC + PC, TC + PC + PL);
       let c = cOf(Math.min(T, TC));
       if (q > 0) c = cOf(TC) + PC * q + 4.8 * q * q * q;      // keep the same speed into the collapse, then accelerate

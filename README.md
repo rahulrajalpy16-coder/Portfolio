@@ -63,8 +63,8 @@ Fixes made:
 ## Publishing on GitHub Pages
 The site is static: `index.html`, `app.js`, `assets/` and `demo/`. In the repository go to Settings, Pages, choose "Deploy from a branch", pick the branch and the root folder, and save. The address will be https://rahulrajalpy16-coder.github.io/Portfolio/
 
-## Tesseract: pages hold (2026-11-21)
-You scroll and swipe through the tesseract freely, and the movement follows your finger or wheel. Every page is a wall for the gesture that reaches it: when a page fills the screen the scroll stops right there, even in the middle of a long fling, and only a new swipe or scroll carries on to the next page. On iPhone the leftover coast of a fling is cancelled at the wall.
+## Tesseract: a moment on every page (2026-11-21)
+Scrolling through the tesseract works as before: the camera follows your scroll and nothing blocks your finger or wheel. When the camera reaches a page that fills the screen it rests there for 1.5 seconds, then smoothly catches up with where you have scrolled. A fast fling shows each page in turn. Clicking a room button or a link jumps straight there.
 
 ## Blink check, 3D monogram, new hero photo (2026-11-21)
 - Recorded full scroll-throughs frame by frame on phone and desktop and fixed what blinked: the hero name flashed once before its letter animation started; the manifesto text flashed bright before dimming; canvases (tesseract, iris, finale) were cleared for a frame whenever a phone's address bar moved; scene progress jumped when the address bar showed or hid (now measured against the stable 100svh height); blurred 3D cards could flash on iPhone, so phones skip that blur.
