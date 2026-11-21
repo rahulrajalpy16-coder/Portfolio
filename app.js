@@ -18,7 +18,14 @@ const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
   const range = (v, a, b) => clamp((v - a) / (b - a));
   const easeOut = t => 1 - Math.pow(1 - t, 3);
   const easeInOut = t => (t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
-  let vw = innerWidth, vh = innerHeight;
+  // the pinned scenes are 100svh tall. On phones innerHeight grows and shrinks as the address bar hides and shows,
+  // which used to nudge every scene's progress (a visible jump). Measure the stable small-viewport height instead.
+  const vhProbe = document.createElement('div');
+  vhProbe.style.cssText = 'position:fixed;left:0;top:0;width:0;height:100vh;height:100svh;visibility:hidden;pointer-events:none';
+  document.body.appendChild(vhProbe);
+  const TOUCH = !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+  const stableVh = () => vhProbe.offsetHeight || innerHeight;
+  let vw = innerWidth, vh = stableVh();
 
   /* ---------- contact ---------- */
   (function contact() {
@@ -42,6 +49,88 @@ const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
       try { await navigator.clipboard.writeText(CONTACT.email); msg.textContent = 'Copied: ' + CONTACT.email; }
       catch { msg.textContent = CONTACT.email; }
     });
+  })();
+
+  /* ---------- the 3D monogram at the end of the page ----------
+     Rahul's RR emblem (assets/3d/rr-emblem.glb: piano black lacquer with a vermilion enamel accent), lit by a soft
+     studio environment so the black gloss catches light. It sways gently, turns as you scroll past, and can be
+     dragged round. It only loads when you get close, only draws while on screen, and the flat logo stays if WebGL is missing. */
+  (function emblem() {
+    const fig = $('#emblem'); if (!fig) return;
+    const cv = $('.em-cv', fig);
+    const STILL = document.documentElement.classList.contains('rm');
+    const CDN = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/';
+    function need(src, ok) {
+      return new Promise((res, rej) => {
+        if (ok()) return res();
+        let sc = document.querySelector(`script[src="${src}"]`);
+        if (!sc) { sc = document.createElement('script'); sc.src = src; document.head.appendChild(sc); }
+        sc.addEventListener('load', () => res()); sc.addEventListener('error', rej);
+        const t = setInterval(() => { if (ok()) { clearInterval(t); res(); } }, 150);
+      });
+    }
+    let started = false;
+    const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting) && !started) { started = true; io.disconnect(); boot(); } }, { rootMargin: '150% 0px' });
+    io.observe(fig);
+    async function boot() {
+      try {
+        await need('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js', () => !!window.THREE);
+        await need(CDN + 'loaders/GLTFLoader.js', () => !!THREE.GLTFLoader);
+        await need(CDN + 'environments/RoomEnvironment.js', () => !!THREE.RoomEnvironment);
+        build();
+      } catch (e) { /* the flat logo stays */ }
+    }
+    function build() {
+      let renderer;
+      try { renderer = new THREE.WebGLRenderer({ canvas: cv, alpha: true, antialias: true, powerPreference: 'low-power' }); } catch (e) { return; }
+      renderer.outputEncoding = THREE.sRGBEncoding;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+      renderer.setClearColor(0x000000, 0);
+      const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(28, 2, .1, 100);
+      const pm = new THREE.PMREMGenerator(renderer);
+      scene.environment = pm.fromScene(new THREE.RoomEnvironment(), .04).texture;
+      const key = new THREE.DirectionalLight(0xfff1e0, 1.4); key.position.set(-3, 4, 5); scene.add(key);
+      const rim = new THREE.PointLight(0xff5a1f, 6, 12, 2); rim.position.set(3.2, .6, -2.4); scene.add(rim);
+      const rim2 = new THREE.PointLight(0x7f9cff, 3, 12, 2); rim2.position.set(-3.4, -.8, -2); scene.add(rim2);
+      const pivot = new THREE.Group(); scene.add(pivot);
+      let W = 0, H = 0, vis = false, raf = 0, dragging = false, px = 0, spin = 0, vel = 0, t0 = performance.now();
+      function size() {
+        const w = cv.clientWidth, h = cv.clientHeight; if (!w || !h || (w === W && h === H)) return;
+        W = w; H = h;
+        renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2)); renderer.setSize(w, h, false);
+        cam.aspect = w / h;
+        // fit the 3.93 unit wide emblem to about 70% of the canvas width
+        const d = (3.93 / .7) / (2 * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * cam.aspect);
+        cam.position.set(0, 0, Math.max(d, 4.6)); cam.lookAt(0, 0, 0); cam.updateProjectionMatrix();
+        draw();
+      }
+      function draw() {
+        const t = (performance.now() - t0) / 1000;
+        const r = fig.getBoundingClientRect(), sp = (r.top + r.height / 2) / innerHeight - .5;   // -0.5 .. 0.5 across the screen
+        if (!dragging) { spin += vel; vel *= .94; }
+        const sway = STILL ? -.38 : Math.sin(t * .45) * .32 - sp * .9;
+        pivot.rotation.y = sway + spin;
+        pivot.rotation.x = STILL ? .06 : Math.sin(t * .38) * .07 + sp * .12;
+        pivot.position.y = STILL ? 0 : Math.sin(t * .7) * .04;
+        renderer.render(scene, cam);
+      }
+      function loop() { draw(); raf = (vis && (!STILL || Math.abs(vel) > .0005 || dragging)) ? requestAnimationFrame(loop) : 0; }
+      const kick = () => { if (!raf) raf = requestAnimationFrame(loop); };
+      new IntersectionObserver(es => { vis = es.some(e => e.isIntersecting); if (vis) kick(); }).observe(fig);
+      if (window.ResizeObserver) new ResizeObserver(size).observe(cv); else addEventListener('resize', size);
+      fig.addEventListener('pointerdown', e => { dragging = true; px = e.clientX; vel = 0; fig.setPointerCapture && fig.setPointerCapture(e.pointerId); kick(); });
+      fig.addEventListener('pointermove', e => { if (!dragging) return; const dx = e.clientX - px; px = e.clientX; spin += dx * .012; vel = dx * .012; kick(); });
+      const up = () => { dragging = false; kick(); };
+      fig.addEventListener('pointerup', up); fig.addEventListener('pointercancel', up);
+      new THREE.GLTFLoader().load('assets/3d/rr-emblem.glb', g => {
+        const m = g.scene;
+        const box = new THREE.Box3().setFromObject(m), c = box.getCenter(new THREE.Vector3());
+        m.position.sub(c);
+        m.traverse(o => { if (o.isMesh && o.material) { o.material.envMapIntensity = 1.2; o.material.needsUpdate = true; } });
+        pivot.add(m);
+        size(); draw(); fig.classList.add('on'); kick();
+      }, undefined, () => { /* the flat logo stays */ });
+    }
   })();
 
   /* ---------- demo dialog ---------- */
@@ -137,6 +226,7 @@ const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
       const t = c.textContent; c.textContent = '';
       [...t].forEach((ch, i) => { const s = document.createElement('span'); s.className = 'ch'; s.textContent = ch; s.style.transitionDelay = (80 + i * 70 + (c.closest('.r2') ? 260 : 0)) + 'ms'; c.appendChild(s); });
     });
+    html.classList.add('split');
     requestAnimationFrame(() => requestAnimationFrame(() => html.classList.add('ready')));
     // inside the circle: stars rushing past, as if you just fell through into another space
     const icv = $('.iris-cv', hero), icx = icv.getContext('2d');
@@ -163,8 +253,11 @@ const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
       }
     }
     function sizeIris() {
-      const dpr = Math.min(devicePixelRatio || 1, 1.75);
-      icv.width = Math.round(icv.clientWidth * dpr); icv.height = Math.round(icv.clientHeight * dpr); iLast = -1;
+      // setting a canvas size clears it, even to the same value; phones fire resize every time the address bar moves,
+      // so only touch the canvas when its size really changed (otherwise it blinks black for a frame)
+      const dpr = Math.min(devicePixelRatio || 1, 1.75), W = Math.round(icv.clientWidth * dpr), H = Math.round(icv.clientHeight * dpr);
+      if (W === icv.width && H === icv.height) return;
+      icv.width = W; icv.height = H; iLast = -1;
     }
     addEventListener('resize', sizeIris);
     requestAnimationFrame(sizeIris);
@@ -381,7 +474,7 @@ const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
           op = 1 - range(d, .12, .32);
           tf = `translate(-50%,-50%) translate3d(${x.toFixed(1)}px,0,${z.toFixed(1)}px)`;
           card.style.zIndex = String(Math.round(800 + z / 10));
-          blur = d > .06 ? range(d, .06, .3) * 8 : 0;
+          blur = d > .06 && !TOUCH ? range(d, .06, .3) * 8 : 0;   // phones skip the blur: on iPhone a blurred 3D layer can flash while it redraws
         }
         if (op <= .001) { if (card.style.visibility !== 'hidden') { card.style.visibility = 'hidden'; card.classList.remove('live'); } return; }
         card.style.visibility = 'visible';
@@ -511,8 +604,9 @@ const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
     }
     addEventListener('load', () => setTimeout(ensureFilm, 4000));
     function sizeFin() {
-      const dpr = Math.min(devicePixelRatio || 1, 1.75);
-      finCv.width = Math.round(finCv.clientWidth * dpr); finCv.height = Math.round(finCv.clientHeight * dpr);
+      const dpr = Math.min(devicePixelRatio || 1, 1.75), W = Math.round(finCv.clientWidth * dpr), H = Math.round(finCv.clientHeight * dpr);
+      if (W === finCv.width && H === finCv.height) return;
+      finCv.width = W; finCv.height = H;
       starCv = null;
       if (film) ensureFilm();
       if (S.s > 0) drawFin(performance.now());
@@ -864,8 +958,11 @@ const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
       }
 
       let hx = 10, hy = 6;
+      let sizedW = 0, sizedH = 0;
       function size() {
         const w = tPin.clientWidth, h = tPin.clientHeight;
+        if (w === sizedW && h === sizedH) return;                       // unchanged: never clear the picture
+        sizedW = w; sizedH = h;
         renderer.setPixelRatio(Math.min(devicePixelRatio || 1, mob ? 1.5 : 1.75));
         renderer.setSize(w, h, false);
         cam.fov = 66; cam.aspect = w / h; cam.updateProjectionMatrix();
@@ -1032,7 +1129,7 @@ const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
   addEventListener('scroll', markDirty, { passive: true });
   addEventListener('resize', () => {
     const w = innerWidth;
-      vw = w; vh = innerHeight; markDirty();
+      vw = w; vh = stableVh(); markDirty();
   });
   addEventListener('load', markDirty);
   markDirty();

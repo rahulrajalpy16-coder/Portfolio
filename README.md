@@ -65,3 +65,8 @@ The site is static: `index.html`, `app.js`, `assets/` and `demo/`. In the reposi
 
 ## Tesseract: pages hold (2026-11-21)
 You scroll and swipe through the tesseract freely, and the movement follows your finger or wheel. Every page is a wall for the gesture that reaches it: when a page fills the screen the scroll stops right there, even in the middle of a long fling, and only a new swipe or scroll carries on to the next page. On iPhone the leftover coast of a fling is cancelled at the wall.
+
+## Blink check, 3D monogram, new hero photo (2026-11-21)
+- Recorded full scroll-throughs frame by frame on phone and desktop and fixed what blinked: the hero name flashed once before its letter animation started; the manifesto text flashed bright before dimming; canvases (tesseract, iris, finale) were cleared for a frame whenever a phone's address bar moved; scene progress jumped when the address bar showed or hid (now measured against the stable 100svh height); blurred 3D cards could flash on iPhone, so phones skip that blur.
+- `assets/3d/rr-emblem.glb`: Rahul's RR monogram in glossy black with a vermilion accent, shown as a 3D sign-off in the contact section, floating in front of the giant name. It sways, turns with scroll and can be dragged. It loads only when you get near (three.js r128 plus GLTFLoader and RoomEnvironment 0.128.0 from jsDelivr), draws only while on screen, holds still with reduced motion, and the flat logo shows if WebGL is unavailable.
+- Hero figure is now `assets/rahul-hero.webp` (new full-body suit photo).

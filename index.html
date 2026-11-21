@@ -11,7 +11,7 @@
 <meta property="og:type" content="website">
 <meta property="og:title" content="Rahul Raj · Momentum">
 <meta property="og:description" content="Websites, workflow automation, interactive 3D and apps. A portfolio told through scroll.">
-<meta property="og:image" content="https://rahulrajalpy16-coder.github.io/Portfolio/assets/rahul-suit-full.webp">
+<meta property="og:image" content="https://rahulrajalpy16-coder.github.io/Portfolio/assets/rahul-hero.webp">
 <meta property="og:url" content="https://rahulrajalpy16-coder.github.io/Portfolio/">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -135,6 +135,8 @@ body[data-hud="accent"] .hud{background:rgba(255,79,31,.8)}
 .hero-name .row{display:block;white-space:nowrap;will-change:transform}
 .hero-name .r2{color:var(--orange)}
 .hero-name .ch{display:inline-block}
+/* until app.js has split the name into letters, keep it hidden, so it never shows once and then vanishes on load */
+.anim:not(.split) .hero-name .clip{visibility:hidden}
 .anim .hero-name .ch{transform:translateY(105%);opacity:0;transition:transform 1.1s var(--ease),opacity .6s}
 .anim.ready .hero-name .ch{transform:none;opacity:1}
 .hero-name .clip{display:block;overflow:hidden;padding:0 .02em}
@@ -195,6 +197,7 @@ body[data-hud="accent"] .hud{background:rgba(255,79,31,.8)}
 @media (max-width:600px){.mf{font-size:max(18px,min(7.4vw,4.1svh))}.mf-wrap .kicker{margin-bottom:18px}.mf-foot{margin-top:22px;gap:10px 22px}}
 .mf .w{transition:color .25s}
 .anim .mf .w{color:rgba(242,238,229,.13)}
+.anim:not(.split) .mf,.anim:not(.split) .mf em{color:rgba(242,238,229,.13)}
 .anim .mf .w.on{color:var(--paper)}
 .anim .mf em .w.on,.mf em{color:var(--orange)}
 .mf-foot{margin-top:34px;display:flex;gap:28px;flex-wrap:wrap;font:500 12px/1.4 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mute-d)}
@@ -598,6 +601,18 @@ body[data-hud="accent"] .hud{background:rgba(255,79,31,.8)}
 .anim .giant span{display:inline-block;transform:translateY(calc((1 - var(--gv,1)) * 40%))}
 .foot{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;padding-top:22px;border-top:1px solid var(--line-d);font:500 12px/1.6 var(--mono);letter-spacing:.06em;color:var(--mute-d)}
 .foot a{text-decoration:none;display:inline-flex;align-items:center;min-height:44px;padding:0 4px;margin:-12px -4px}.foot a:hover{color:var(--paper)}
+/* the sign-off: Rahul's RR monogram as a glossy 3D object floating in front of the giant name */
+.emblem{position:relative;width:min(620px,88vw);aspect-ratio:2.1/1;margin:100px auto -7vw;z-index:2;touch-action:pan-y;cursor:grab;user-select:none;-webkit-user-select:none}
+.emblem:active{cursor:grabbing}
+.emblem::before{content:"";position:absolute;inset:-30% -18%;z-index:-1;pointer-events:none;background:radial-gradient(closest-side,rgba(255,92,40,.16),rgba(90,120,255,.07) 55%,transparent 78%)}
+.em-cv{position:absolute;inset:-14% -6%;width:112%;height:128%;display:block;opacity:0;transition:opacity .8s}
+.emblem.on .em-cv{opacity:1}
+.em-fb{position:absolute;inset:0;margin:auto;width:46%;height:auto;transition:opacity .5s}
+.emblem.on .em-fb{opacity:0}
+.emblem figcaption{position:absolute;left:0;right:0;bottom:-34px;text-align:center;font:500 11px/1 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--mute-d);opacity:0;transition:opacity .6s .6s}
+.emblem.on figcaption{opacity:.8}
+.emblem + .giant{margin-top:0}
+@media (max-width:900px){.emblem{margin-top:70px;margin-bottom:-4vw}}
 @media (max-width:900px){.c-grid{grid-template-columns:1fr}.c-list div{grid-template-columns:96px 1fr}.contact{padding-top:100px}.giant{margin-top:70px}}
 
 /* ---------- demo dialog ---------- */
@@ -652,7 +667,7 @@ dialog.demo iframe{flex:1;border:0;width:100%;background:#0a0a0a}
       <span class="row r1" aria-hidden="true"><span class="clip">RAHUL</span></span>
       <span class="row r2" aria-hidden="true"><span class="clip">RAJ</span></span>
     </h1>
-    <img class="hero-fig" src="assets/rahul-suit-full.webp" width="469" height="1499" alt="Illustration of Rahul Raj standing in a black three-piece suit, black shirt and tie, and sunglasses" fetchpriority="high">
+    <img class="hero-fig" src="assets/rahul-hero.webp" width="468" height="1496" alt="Illustration of Rahul Raj standing in a black three-piece suit, black shirt and tie, and sunglasses, hands in his pockets" fetchpriority="high">
     <p class="hero-meta tl"><span class="dot"></span>Portfolio · 2026<br>Based in the UAE</p>
     <p class="hero-meta tr">Web · AI automation<br>3D · Apps</p>
     <div class="hero-foot">
@@ -952,6 +967,11 @@ dialog.demo iframe{flex:1;border:0;width:100%;background:#0a0a0a}
     <dl class="c-list" id="clist"></dl>
   </div>
   <p class="private"><b>A note</b><span>Some of my most involved work, including marine 3D, VR walkthroughs and company websites, was made for employers and their clients. It belongs to them, so it is not shown here.</span></p>
+  <figure class="emblem" id="emblem" role="img" aria-label="Rahul Raj RR monogram in glossy black with an orange accent, shown in 3D">
+    <canvas class="em-cv" aria-hidden="true"></canvas>
+    <img class="em-fb" src="assets/logo-rr-light.webp" width="246" height="120" alt="">
+    <figcaption aria-hidden="true">Drag to turn</figcaption>
+  </figure>
   <div class="giant" data-view="giant" aria-hidden="true"><span>Rahul Raj</span></div>
   <footer class="foot">
     <span>© 2026 Rahul Raj · Concept projects and sample data are labelled. No client work is shown.</span>
