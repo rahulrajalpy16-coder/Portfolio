@@ -55,6 +55,28 @@ const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
      Rahul's RR emblem (assets/3d/rr-emblem.glb: piano black lacquer with a vermilion enamel accent), lit by a soft
      studio environment so the black gloss catches light. It sways gently, turns as you scroll past, and can be
      dragged round. It only loads when you get close, only draws while on screen, and the flat logo stays if WebGL is missing. */
+  /* the logo film: it plays once when the end comes into view, then dissolves into the live 3D emblem (drag to turn).
+     Reduced motion, or a browser that will not play it (for example iPhone Low Power Mode), goes straight to the emblem. */
+  (function ident() {
+    const fig = $('#emblem'), v = fig && $('.em-film', fig);
+    if (!v || document.documentElement.classList.contains('rm') || !('IntersectionObserver' in window)) return;
+    fig.classList.add('film');
+    let started = false;
+    const finish = () => fig.classList.add('done');
+    v.addEventListener('ended', finish); v.addEventListener('error', finish);
+    new IntersectionObserver((es, o) => {
+      if (es.some(e => e.isIntersecting)) { o.disconnect(); v.src = v.dataset.src; v.load(); }
+    }, { rootMargin: '120% 0px' }).observe(fig);
+    new IntersectionObserver((es, o) => {
+      if (started || !es.some(e => e.intersectionRatio >= .55)) return;
+      started = true; o.disconnect();
+      if (!v.src) { v.src = v.dataset.src; v.load(); }
+      v.muted = true;
+      const pr = v.play(); if (pr && pr.catch) pr.catch(finish);
+      setTimeout(finish, 11000);          // never leave the emblem hidden behind a stalled film
+    }, { threshold: [0, .55] }).observe(fig);
+  })();
+
   (function emblem() {
     const fig = $('#emblem'); if (!fig) return;
     const cv = $('.em-cv', fig);
@@ -216,7 +238,7 @@ const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
      Scenes (animated mode only)
      ========================================================= */
   const scenes = [];
-  function scene(el, fn) { if (el) scenes.push({ el, fn, cur: -1, target: 0 }); }
+  function scene(el, fn, e) { if (el) scenes.push({ el, fn, cur: -1, target: 0, e }); }   // e: own smoothing (lower is softer)
 
   if (ANIM) {
     /* ---- 01 hero: the name splits, then a circle of ink opens from Rahul's chest into a new world ---- */
@@ -365,8 +387,14 @@ const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
     const TC = NST - .25, U = PRE + TC + PC + PL;
     const S = { c: -1, q: 0, s: 0 };
     let roomNow = null;
-    // one unbroken fall: you never stop, you only ease off a little as each page reaches your face (c = k at T = k + .5)
-    const FA = .6, cOf = T => { const u = T - .5; return u - FA * Math.sin(2 * Math.PI * u) / (2 * Math.PI); };
+    // The camera path, driven only by your scroll (c = k at T = k + .5, when page k fills the screen).
+    // Around each page there is a rest band (REST of the scroll on either side) where the camera barely moves,
+    // so the page stays with you while you keep scrolling. Between pages the camera glides down an empty
+    // stretch of corridor, starting and stopping with zero speed (smoothstep), so nothing ever jolts.
+    // The pages only exist near their own stop, so the middle of every glide is empty corridor you can feel.
+    const REST = .1;
+    const glide = f => { const t = range(f, REST, 1 - REST); return t * t * (3 - 2 * t); };
+    const cOf = T => { const x = T - .5, n = Math.floor(x); return n + glide(x - n); };
     const pOf = T => (T + PRE) / U;
     const pad = n => String(n).padStart(2, '0');
     // which wall each station comes out of: the two titles rise in the middle, the items alternate left, right, left...
@@ -388,41 +416,8 @@ const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
       window.scrollTo({ top: r.top + scrollY + pOf(T) * (r.height - vh), behavior: 'smooth' });
     }));
 
-    /* ---- a moment on every page ----
-       Scrolling works exactly as before: the camera follows your scroll. The only addition is a pause in the picture,
-       not in the scroll: when the camera reaches a page (it fills the screen at T = k + .5) it rests there for HOLD ms,
-       then smoothly catches up with wherever you have scrolled to. Nothing ever fights your finger or wheel,
-       so there is nothing to blink. A click on a room button or a link jumps straight there without stopping. */
-    const HOLD = 1500;
-    let Tv = null, holdUntil = 0, lastNow = 0, skipHolds = false;
-    const held = new Set();
-    const again = () => requestAnimationFrame(() => markDirty());
-    addEventListener('click', () => { skipHolds = true; holdUntil = 0; }, true);
-    function visT(T) {
-      const now = performance.now(), dt = Math.min(.1, lastNow ? (now - lastNow) / 1000 : 0); lastNow = now;
-      if (Tv === null) { Tv = T; return T; }
-      if (now < holdUntil) { again(); return Tv; }
-      const gap = T - Tv;
-      if (Math.abs(gap) < .0005) { Tv = T; skipHolds = false; }
-      else {
-        // ease toward the scroll position, never slower than about two rooms a second
-        const mag = Math.min(Math.abs(gap), Math.max(Math.abs(gap) * (1 - Math.exp(-7 * dt)), 2.2 * dt));
-        const nT = Tv + Math.sign(gap) * mag;
-        if (!skipHolds) {
-          const lo = Math.min(Tv, nT), hi = Math.max(Tv, nT);
-          for (let k = 0; k < NST; k++) {
-            const at = k + .5;
-            if (at > lo + 1e-6 && at <= hi + 1e-6 && !held.has(k)) { Tv = at; held.add(k); holdUntil = now + HOLD; again(); return Tv; }
-          }
-        }
-        Tv = nT; again();
-      }
-      held.forEach(k => { if (Math.abs(Tv - (k + .5)) > .6) held.delete(k); });   // leave a page and it will pause again next time
-      return Tv;
-    }
-
     scene(tess, p => {
-      const T = visT(p * U - PRE);
+      const T = p * U - PRE;
       const q = range(T, TC, TC + PC), s = range(T, TC + PC, TC + PC + PL);
       let c = cOf(Math.min(T, TC));
       if (q > 0) c = cOf(TC) + PC * q + 4.8 * q * q * q;      // keep the same speed into the collapse, then accelerate
@@ -439,21 +434,23 @@ const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
         const d = c - k, sd = side[k];
         let op, tf, fz = 0, blur = 0;
         if (d <= 0) {
-          const u = range(d, -.36, 0);                           // 0 far away, 1 in your face (it only sets off once the last page has gone)
-          const z = -6200 * Math.pow(1 - u, 1.7);
-          const swing = 1 - easeInOut(range(u, .45, 1));         // it leaves the wall in the last half of the approach
+          const u = range(d, -.25, 0);                            // 0 far away, 1 in your face (it only sets off once the corridor is empty)
+          const z = -6800 * Math.pow(1 - u, 1.8);
+          const swing = 1 - easeInOut(range(u, .4, 1));          // it leaves the wall in the last part of the approach
           const x = sd * vw * .62 * swing, ry = -sd * 78 * swing;
-          op = range(u, 0, .12);
-          tf = `translate(-50%,-50%) translate3d(${x.toFixed(1)}px,0,${z.toFixed(1)}px) rotateY(${ry.toFixed(2)}deg)`;
+          const rx = (1 - u) * 9, rz = sd ? sd * -7 * swing : (1 - u) * 4 * (k % 2 ? 1 : -1);   // it tilts in from the depth and levels out
+          op = range(u, 0, .2);
+          tf = `translate(-50%,-50%) translate3d(${x.toFixed(1)}px,${((1 - u) * vh * .06).toFixed(1)}px,${z.toFixed(1)}px) rotateY(${ry.toFixed(2)}deg) rotateX(${rx.toFixed(2)}deg) rotateZ(${rz.toFixed(2)}deg)`;
           fz = sd ? 1 - range(u, .7, 1) : 0;
           card.style.zIndex = String(Math.round(800 + z / 10));          // far ones stay behind near ones
         } else {
-          const w0 = range(d, 0, .34), w = w0 * w0 * (1.6 - .6 * w0);   // it picks up speed as it goes past you
-          const z = w * 1150, x = -(sd || (k % 2 ? 1 : -1)) * w * vw * .18;
-          op = 1 - range(d, .12, .32);
-          tf = `translate(-50%,-50%) translate3d(${x.toFixed(1)}px,0,${z.toFixed(1)}px)`;
+          const w0 = range(d, 0, .22), w = w0 * w0 * (1.6 - .6 * w0);   // it picks up speed as it goes past you
+          const sx = sd || (k % 2 ? 1 : -1);
+          const z = w * 1250, x = -sx * w * vw * .22;
+          op = 1 - range(d, .08, .2);
+          tf = `translate(-50%,-50%) translate3d(${x.toFixed(1)}px,0,${z.toFixed(1)}px) rotateY(${(sx * w * 24).toFixed(2)}deg)`;
           card.style.zIndex = String(Math.round(800 + z / 10));
-          blur = d > .06 && !TOUCH ? range(d, .06, .3) * 8 : 0;   // phones skip the blur: on iPhone a blurred 3D layer can flash while it redraws
+          blur = d > .04 && !TOUCH ? range(d, .04, .18) * 8 : 0;   // phones skip the blur: on iPhone a blurred 3D layer can flash while it redraws
         }
         if (op <= .001) { if (card.style.visibility !== 'hidden') { card.style.visibility = 'hidden'; card.classList.remove('live'); } return; }
         card.style.visibility = 'visible';
@@ -461,7 +458,7 @@ const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
         card.style.transform = tf;
         card.style.filter = blur ? `blur(${blur.toFixed(1)}px)` : '';
         card.style.setProperty('--fz', fz.toFixed(3));
-        card.classList.toggle('live', Math.abs(d) < .12);
+        card.classList.toggle('live', Math.abs(d) < .1);
         card.style.setProperty('--wp', (1 - Math.min(1, Math.abs(d) * 3)).toFixed(3));
       });
       if (cube) cube.style.setProperty('--rot', (30 + c * 90).toFixed(1) + 'deg');
@@ -503,7 +500,62 @@ const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
         bhCss.style.setProperty('--bf', (range(q, .8, 1) * 3000).toFixed(0) + 'px');
       }
       glKick();
-    });
+    }, .085);      // the tesseract eats your scroll a little more softly than the rest of the page
+
+    /* ---- 03b in motion: the running film, scrubbed by your scroll, as the hand-over from Process to Intent ----
+       A slit of light opens into the film, Rahul sprints through the streaks while you scroll, "Keep moving" lands,
+       then the stage pushes in and fades as the Intent page slides up over it. Tall screens pan with the runner. */
+    const run = $('.run');
+    if (run) {
+      const runCv = $('.run-cv', run), rcx = runCv.getContext('2d'), runWord = $('.run-word', run), runTag = $('.run-tag', run);
+      const RUN_N = 84;
+      // where the runner is across the frame (0 left, 1 right) over the clip, read off the footage
+      const RX = [[0, 0], [.048, .3], [.072, .37], [.145, .47], [.29, .45], [.43, .47], [.506, .66], [.58, .74], [.72, .69], [.8, .75], [1, .75]];
+      const runnerAt = t => { for (let i = 1; i < RX.length; i++) if (t <= RX[i][0]) { const [t0, a] = RX[i - 1], [t1, b] = RX[i]; return a + (b - a) * (t - t0) / (t1 - t0); } return .75; };
+      let runSeq = null, runP = 0, rW = 0, rH = 0, rLast = null, rLastKey = '';
+      const F0 = 4;                                                     // the first frames are him entering an empty stage: start once he is in
+      const runFrame = () => Math.round(F0 + range(runP, .07, .86) * (RUN_N - 1 - F0));
+      const runT = () => runFrame() / (RUN_N - 1);
+      function drawRun(force) {
+        if (!runSeq || !rW) return;
+        const t = runT(), im = runSeq.pick(runFrame());
+        if (!im) return;
+        const key = rW + 'x' + rH + ':' + t.toFixed(4);
+        if (!force && im === rLast && key === rLastKey) return;
+        rLast = im; rLastKey = key;
+        const iw = im.naturalWidth, ih = im.naturalHeight;
+        let sc, x, y;
+        if (rW / rH >= 1.1) { sc = Math.max(rW / iw, rH / ih); x = (rW - iw * sc) / 2; y = (rH - ih * sc) / 2; }
+        else {
+          // tall screens: a closer crop that follows him across the frame
+          sc = Math.max(rW / iw * 1.75, rH * .42 / ih);
+          const win = rW / (iw * sc), left = clamp(runnerAt(t) - win / 2, 0, 1 - win);
+          x = -left * iw * sc; y = (rH - ih * sc) * .5;
+        }
+        rcx.fillStyle = '#020203'; rcx.fillRect(0, 0, rW, rH);
+        rcx.drawImage(im, x, y, iw * sc, ih * sc);
+      }
+      function sizeRun() {
+        const dpr = Math.min(devicePixelRatio || 1, 1.5);
+        const w = Math.round(runCv.clientWidth * dpr), h = Math.round(runCv.clientHeight * dpr);
+        if (!w || !h || (w === rW && h === rH)) return;
+        rW = runCv.width = w; rH = runCv.height = h; drawRun(true);
+      }
+      new IntersectionObserver((es, o) => {
+        if (es.some(e => e.isIntersecting) && !runSeq) { o.disconnect(); runSeq = loadSeq('run', RUN_N, () => drawRun(true), runFrame); sizeRun(); }
+      }, { rootMargin: '200% 0px' }).observe(run);
+      if (window.ResizeObserver) new ResizeObserver(sizeRun).observe(runCv); else addEventListener('resize', sizeRun);
+      scene(run, p => {
+        runP = p;
+        run.style.setProperty('--ro', (1 - easeOut(range(p, 0, .12))).toFixed(4));
+        run.style.setProperty('--rz', easeInOut(range(p, .86, 1)).toFixed(4));
+        run.style.setProperty('--rx', range(p, .9, 1).toFixed(4));
+        runTag.style.setProperty('--tg', (range(p, .08, .2) * (1 - range(p, .84, .94))).toFixed(3));
+        runWord.style.setProperty('--w1', (easeOut(range(p, .52, .68)) * (1 - range(p, .9, 1))).toFixed(3));
+        runWord.style.setProperty('--w2', (easeOut(range(p, .6, .76)) * (1 - range(p, .9, 1))).toFixed(3));
+        drawRun();
+      });
+    }
 
     /* ---------- the other side: a universe inside the sunglasses lens, then the film plays out ----------
        The film is the sunglasses and smoke clip (webp frames, scrubbed by scroll). We start deep inside
@@ -1072,9 +1124,17 @@ const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
       const v = clamp((vh - r.top) / (vh + r.height));
       el.style.setProperty('--v', v.toFixed(4));
       if (k === 'inter') {
-        m1.style.transform = `translate3d(${(-8 - v * 34).toFixed(2)}vw,0,0)`;
-        m2.style.transform = `translate3d(${(-50 + v * 34).toFixed(2)}vw,0,0)`;
-        m3.style.transform = `translate3d(${(-v * 30).toFixed(2)}vw,0,0)`;
+        if (innerWidth <= 700) {
+          // phones: each phrase is whole on screen, so it only glides in from its own side and settles
+          const e1 = easeOut(range(v, .04, .42)), e2 = easeOut(range(v, .1, .5));
+          m1.style.transform = `translate3d(${(-(1 - e1) * 14).toFixed(2)}vw,0,0)`;
+          m2.style.transform = `translate3d(${((1 - e2) * 14).toFixed(2)}vw,0,0)`;
+          m3.style.transform = 'none';
+        } else {
+          m1.style.transform = `translate3d(${(-8 - v * 34).toFixed(2)}vw,0,0)`;
+          m2.style.transform = `translate3d(${(-50 + v * 34).toFixed(2)}vw,0,0)`;
+          m3.style.transform = `translate3d(${(-v * 30).toFixed(2)}vw,0,0)`;
+        }
         m1.style.fontVariationSettings = `"wght" ${Math.round(250 + easeInOut(range(v, .1, .6)) * 550)},"wdth" 100`;
         m2.style.fontVariationSettings = `"wght" 800,"wdth" ${Math.round(100 - easeInOut(range(v, .3, .8)) * 25)}`;
       } else if (k === 'portrait') el.style.setProperty('--pv', easeOut(range(v, .05, .45)).toFixed(4));
@@ -1095,8 +1155,8 @@ const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
       const span = r.height - vh;
       s.target = span > 0 ? clamp(-r.top / span) : 0;
       if (s.cur < 0) s.cur = s.target;
-      else s.cur += (s.target - s.cur) * k;
-      if (Math.abs(s.target - s.cur) < .0004) s.cur = s.target; else busy = true;
+      else s.cur += (s.target - s.cur) * (s.e ? 1 - Math.pow(1 - s.e, dt / 16.7) : k);
+      if (Math.abs(s.target - s.cur) < (s.e ? .00004 : .0004)) s.cur = s.target; else busy = true;
       // only draw scenes that are near the screen
       if (r.bottom > -vh * .2 && r.top < vh * 1.2) s.fn(s.cur);
     }

@@ -535,6 +535,41 @@ body[data-hud="accent"] .hud{background:rgba(255,79,31,.8)}
 .rm .mq.m3 span+span,html:not(.js) .mq.m3 span+span{display:inline-block}
 .rm .mq.m3 span:nth-child(n+8),html:not(.js) .mq.m3 span:nth-child(n+8){display:none}
 .inter .ix{display:flex;justify-content:space-between;padding:0 var(--gut);margin-bottom:4svh;font:500 12px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase}
+/* phones: a moving strip crops the words, so each phrase is set whole, on its own lines, and glides in instead */
+@media (max-width:700px){
+  .inter{padding:13svh 0 11svh}
+  .js .inter .mq{white-space:normal;padding:0 var(--gut);font-size:clamp(46px,15.5vw,92px);line-height:.94}
+  .js .inter .mq span+span{display:none}
+  .js .inter .mq.m2{margin-top:.18em}
+  .js .inter .mq.m3{font-size:12px;line-height:2;letter-spacing:.18em;margin-top:6svh;text-align:left}
+  .js .inter .mq.m3 span{padding-right:.9em}
+  .js .inter .mq.m3 span+span{display:inline-block}
+  .js .inter .mq.m3 span:nth-child(n+8){display:none}
+  .inter + .about{padding-top:80px}
+}
+
+/* =========================================================
+   03b IN MOTION · the running film as a hand-over between pages
+   ========================================================= */
+.run{background:#020203;color:#EEEAF6;position:relative;z-index:4}
+.run .pin{background:#020203}
+.run-cv{position:absolute;inset:0;width:100%;height:100%;display:block;
+  clip-path:inset(calc(var(--ro,1) * 50%) 0 calc(var(--ro,1) * 50%) 0);transform:scale(calc(1 + var(--rz,0) * .08));opacity:calc(1 - var(--rx,0))}
+.run-still{display:none}
+.run-word{position:absolute;left:var(--gut);right:var(--gut);bottom:9svh;display:flex;flex-direction:column;pointer-events:none;
+  font:800 clamp(54px,11vw,190px)/.84 var(--display);letter-spacing:-.045em;text-transform:uppercase;mix-blend-mode:screen}
+.run-word span{display:block;color:transparent;-webkit-text-stroke:1.5px rgba(238,234,246,.55);opacity:var(--w1,0);transform:translate3d(calc((1 - var(--w1,0)) * -6vw),0,0)}
+.run-word span+span{align-self:flex-end;-webkit-text-stroke:0;color:#EEEAF6;opacity:var(--w2,0);transform:translate3d(calc((1 - var(--w2,0)) * 6vw),0,0)}
+.run-tag{position:absolute;top:calc(var(--nav-h,64px) + 4svh);left:var(--gut);right:var(--gut);display:flex;justify-content:space-between;margin:0;
+  font:500 12px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:#9fb4ff;opacity:var(--tg,0)}
+/* without scroll animation the film is a single still frame */
+html:not(.anim) .run .pin{height:auto;aspect-ratio:16/9;max-height:90svh}
+html:not(.anim) .run-cv{display:none}
+html:not(.anim) .run-still{display:block;width:100%;height:100%;object-fit:cover}
+html:not(.anim) .run-tag{display:none}
+html:not(.anim) .run-word{bottom:calc(5% + 32px);font-size:clamp(30px,7vw,110px)}
+html:not(.anim) .run-word span{opacity:1;transform:none}
+@media (max-width:700px){.run-word{bottom:12svh}.run-tag{flex-direction:column;gap:10px}}
 
 /* =========================================================
    07 ABOUT
@@ -605,6 +640,13 @@ body[data-hud="accent"] .hud{background:rgba(255,79,31,.8)}
 .emblem{position:relative;width:min(620px,88vw);aspect-ratio:2.1/1;margin:100px auto -7vw;z-index:2;touch-action:pan-y;cursor:grab;user-select:none;-webkit-user-select:none}
 .emblem:active{cursor:grabbing}
 .emblem::before{content:"";position:absolute;inset:-30% -18%;z-index:-1;pointer-events:none;background:radial-gradient(closest-side,rgba(255,92,40,.16),rgba(90,120,255,.07) 55%,transparent 78%)}
+/* the logo film plays first, then dissolves into the live 3D emblem, which you can then drag */
+.em-film{position:absolute;left:50%;top:50%;width:118%;aspect-ratio:16/9;height:auto;transform:translate(-50%,-50%);object-fit:cover;display:none;pointer-events:none;
+  -webkit-mask-image:radial-gradient(ellipse 50% 50% at 50% 50%,#000 55%,transparent 100%);mask-image:radial-gradient(ellipse 50% 50% at 50% 50%,#000 55%,transparent 100%);transition:opacity 1.4s ease}
+.emblem.film .em-film{display:block}
+.emblem.film.done .em-film{opacity:0}
+.emblem.film:not(.done) .em-cv,.emblem.film:not(.done) .em-fb,.emblem.film:not(.done) figcaption{opacity:0!important}
+.emblem.film:not(.done){pointer-events:none}
 .em-cv{position:absolute;inset:-14% -6%;width:112%;height:128%;display:block;opacity:0;transition:opacity .8s}
 .emblem.on .em-cv{opacity:1}
 .em-fb{position:absolute;inset:0;margin:auto;width:46%;height:auto;transition:opacity .5s}
@@ -762,6 +804,16 @@ dialog.demo iframe{flex:1;border:0;width:100%;background:#0a0a0a}
 
 
 <!-- 04 INTERLUDE -->
+<!-- 03b IN MOTION: the running film, scrubbed by scroll, as the hand-over from Process to Intent -->
+<section id="motion" class="scene run dark" data-scene="run" data-theme="dark" data-ch="04|In motion" style="--h:300" aria-label="Rahul running through streaks of light">
+  <div class="pin">
+    <canvas class="run-cv" aria-hidden="true"></canvas>
+    <img class="run-still" src="assets/run/f050.webp" width="960" height="540" alt="" loading="lazy">
+    <div class="run-word" aria-hidden="true"><span>Keep</span><span>moving</span></div>
+    <p class="run-tag" aria-hidden="true"><span>In motion</span><span>From idea to live</span></p>
+  </div>
+</section>
+
 <section class="inter" data-view="inter" data-theme="dark" data-ch="04|Intent" aria-label="Designed to engage, built to be useful">
   <div class="ix" aria-hidden="true"><span>Intent</span><span>Two rules</span></div>
   <div class="mq m1" aria-hidden="true"><span>Designed to engage</span><span>Designed to engage</span><span>Designed to engage</span></div>
@@ -794,7 +846,7 @@ dialog.demo iframe{flex:1;border:0;width:100%;background:#0a0a0a}
 </section>
 
 <!-- 06 THE TESSERACT: capabilities, work, black hole, universe -->
-<section id="capabilities" class="scene tess dark" data-scene="tess" data-theme="dark" data-ch="06|Tesseract" style="--h:2000">
+<section id="capabilities" class="scene tess dark" data-scene="tess" data-theme="dark" data-ch="06|Tesseract" style="--h:3200">
  <div class="pin">
   <canvas class="tess-gl" aria-hidden="true"></canvas>
   <div class="tess-css" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
@@ -968,6 +1020,7 @@ dialog.demo iframe{flex:1;border:0;width:100%;background:#0a0a0a}
   </div>
   <p class="private"><b>A note</b><span>Some of my most involved work, including marine 3D, VR walkthroughs and company websites, was made for employers and their clients. It belongs to them, so it is not shown here.</span></p>
   <figure class="emblem" id="emblem" role="img" aria-label="Rahul Raj RR monogram in glossy black with an orange accent, shown in 3D">
+    <video class="em-film" aria-hidden="true" muted playsinline preload="none" poster="assets/film/rr-ident-first.webp" data-src="assets/film/rr-ident.mp4"></video>
     <canvas class="em-cv" aria-hidden="true"></canvas>
     <img class="em-fb" src="assets/logo-rr-light.webp" width="246" height="120" alt="">
     <figcaption aria-hidden="true">Drag to turn</figcaption>

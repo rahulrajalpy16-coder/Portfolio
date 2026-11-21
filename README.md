@@ -63,10 +63,15 @@ Fixes made:
 ## Publishing on GitHub Pages
 The site is static: `index.html`, `app.js`, `assets/` and `demo/`. In the repository go to Settings, Pages, choose "Deploy from a branch", pick the branch and the root folder, and save. The address will be https://rahulrajalpy16-coder.github.io/Portfolio/
 
-## Tesseract: a moment on every page (2026-11-21)
-Scrolling through the tesseract works as before: the camera follows your scroll and nothing blocks your finger or wheel. When the camera reaches a page that fills the screen it rests there for 1.5 seconds, then smoothly catches up with where you have scrolled. A fast fling shows each page in turn. Clicking a room button or a link jumps straight there.
+## Tesseract: a moment on every page (Version 18, 2026-11-22)
+The camera is driven only by your scroll, with no timed pause (the 1.5 second pause of Version 17 caused a jerky catch-up). Around each page there is a rest band where the camera barely moves, so the page stays with you while you keep scrolling. Between pages the camera glides (smoothstep, so it starts and stops with zero speed) through an empty stretch of corridor that takes about half a screen of scrolling. Cards tilt in from the depth and swing out as they pass. The tesseract scroll is softened a little more than the rest of the page, and the section is taller (`--h:3200`). Nothing ever blocks your finger or wheel.
 
 ## Blink check, 3D monogram, new hero photo (2026-11-21)
 - Recorded full scroll-throughs frame by frame on phone and desktop and fixed what blinked: the hero name flashed once before its letter animation started; the manifesto text flashed bright before dimming; canvases (tesseract, iris, finale) were cleared for a frame whenever a phone's address bar moved; scene progress jumped when the address bar showed or hid (now measured against the stable 100svh height); blurred 3D cards could flash on iPhone, so phones skip that blur.
 - `assets/3d/rr-emblem.glb`: Rahul's RR monogram in glossy black with a vermilion accent, shown as a 3D sign-off in the contact section, floating in front of the giant name. It sways, turns with scroll and can be dragged. It loads only when you get near (three.js r128 plus GLTFLoader and RoomEnvironment 0.128.0 from jsDelivr), draws only while on screen, holds still with reduced motion, and the flat logo shows if WebGL is unavailable.
 - Hero figure is now `assets/rahul-hero.webp` (new full-body suit photo).
+
+## Version 18 (2026-11-22)
+- **In motion** (`#motion`, between Process and Intent): Rahul's running clip as 84 webp frames in `assets/run/`, scrubbed by scroll. A slit of light opens into the film, he sprints through the light streaks, "Keep moving" lands, then the stage pushes in and fades as Intent slides up over it. Tall screens use a closer crop that pans with him. Reduced motion shows one still frame.
+- **Intent on phones**: each phrase is shown whole on its own lines and glides in from the side, instead of a cropped moving strip; the empty space below it is reduced.
+- **Logo film at the end**: `assets/film/rr-ident.mp4` (Rahul's RR logo clip, no audio, 0.97 MB) plays once when the sign-off comes into view, then dissolves into the live 3D emblem you can drag. Reduced motion, or a browser that refuses to autoplay (for example iPhone Low Power Mode), goes straight to the emblem.
