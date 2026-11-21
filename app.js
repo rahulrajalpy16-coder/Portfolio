@@ -295,102 +295,58 @@ const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
       window.scrollTo({ top: r.top + scrollY + pOf(T) * (r.height - vh), behavior: 'smooth' });
     }));
 
-    /* ---- page by page: inside the tesseract one swipe, wheel flick or key press moves exactly one page.
-       Each page stops when it fills the screen (T = k + .5) and waits for the next gesture.
-       A long trackpad or phone fling is swallowed until it ends, so the corridor never runs start to end at once. */
-    (function stepper() {
-      const yOf = T => { const r = tess.getBoundingClientRect(); return r.top + scrollY + pOf(T) * (r.height - vh); };
-      const stops = () => [yOf(-PRE)].concat(sts.map((_, k) => yOf(k + .5)), [yOf(TC)]);
-      let touchMode = false, busy = false, lastWheel = 0, lastInput = 0, lastY = scrollY, touchY = null, touchDone = false;
-      const ease = t => 1 - Math.pow(1 - t, 3);
+    /* ---- pages hold: you scroll and swipe freely through the tesseract, the movement follows your finger or wheel,
+       but every page is a wall for the gesture that reaches it. When a page fills the screen (T = k + .5) the scroll
+       stops right there, even mid-fling, and only a new swipe or scroll carries you on to the next page. */
+    (function holds() {
       const root = document.documentElement;
-      // iPhone keeps a fling coasting after the finger lifts, and scrollTo alone does not stop it.
-      // Briefly switching scrolling off kills that coast, so the page really stays put.
-      function freeze(y) {
-        root.style.overflow = 'hidden'; document.body.style.overflow = 'hidden';
-        window.scrollTo(0, y);
-        requestAnimationFrame(() => requestAnimationFrame(() => { root.style.overflow = ''; document.body.style.overflow = ''; }));
+      const yOf = T => { const r = tess.getBoundingClientRect(); return r.top + scrollY + pOf(T) * (r.height - vh); };
+      const pages = () => sts.map((_, k) => yOf(k + .5));
+      let lo = -Infinity, hi = Infinity, lastWheel = 0, touchMode = false, freezing = false;
+      // the walls for the gesture that starts now: the nearest page ahead in each direction
+      function arm() {
+        const y = scrollY, ps = pages();
+        hi = Infinity; lo = -Infinity;
+        for (const v of ps) { if (v > y + 2) { hi = v; break; } }
+        for (let i = ps.length - 1; i >= 0; i--) if (ps[i] < y - 2) { lo = ps[i]; break; }
       }
-      // while inside the tesseract, a finger never scrolls the page natively (so no fling can start); our steps do the moving
-      function lockZone() {
-        const st = stops(), y = scrollY;
-        root.classList.toggle('tess-lock', y >= st[0] - 2 && y <= st[st.length - 1] + 2);
+      const free = () => { lo = -Infinity; hi = Infinity; };
+      // hold exactly on a page; on iPhone, briefly switching scrolling off also kills the fling's coast
+      function hold(v) {
+        if (touchMode) {
+          freezing = true;
+          root.style.overflow = 'hidden'; document.body.style.overflow = 'hidden';
+          window.scrollTo(0, v);
+          requestAnimationFrame(() => requestAnimationFrame(() => { root.style.overflow = ''; document.body.style.overflow = ''; window.scrollTo(0, v); freezing = false; }));
+        } else window.scrollTo(0, v);
       }
-      function go(to) {
-        busy = true;
-        if (touchMode) freeze(scrollY);
-        const from = scrollY, dist = to - from, dur = Math.min(1300, 650 + Math.abs(dist) * .35), t0 = performance.now();
-        const html = document.documentElement, prev = html.style.scrollBehavior; html.style.scrollBehavior = 'auto';
-        (function f(now) {
-          const t = Math.min(1, (now - t0) / dur);
-          window.scrollTo(0, from + dist * ease(t));
-          if (t < 1) requestAnimationFrame(f);
-          else { html.style.scrollBehavior = prev; lastY = scrollY; if (touchMode) freeze(to); lockZone(); setTimeout(() => { busy = false; }, 450); }   // hold the page a moment
-        })(t0);
-      }
-      // the next stop in the direction of travel, or null when the gesture should leave the tesseract normally
-      function next(dir) {
-        const st = stops(), y = scrollY, a = st[0], z = st[st.length - 1];
-        if (y < a - 2 || y > z + 2) return null;                        // not inside the page-by-page stretch
-        if (dir > 0) { if (y >= z - 2) return null; return st.find(v => v > y + 2); }
-        if (y <= a + 2) return null;
-        for (let i = st.length - 1; i >= 0; i--) if (st[i] < y - 2) return st[i];
-        return null;
-      }
-      function step(dir, e) {
-        const to = next(dir);
-        if (to == null) return false;
-        if (e && e.cancelable) e.preventDefault();
-        if (!busy) go(to);
-        return true;
-      }
-      addEventListener('wheel', e => {
-        if (e.ctrlKey || Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
-        const now = performance.now(), gap = now - lastWheel; lastWheel = lastInput = now;
-        const dir = Math.sign(e.deltaY); if (!dir) return;
-        const to = next(dir);
-        if (to == null) return;
-        e.preventDefault();
-        // one gesture = one page: the tail of a long fling keeps arriving, so only a fresh flick (after a short pause) moves on
-        if (!busy && gap > 220) go(to);
-      }, { passive: false });
-      addEventListener('touchstart', e => { touchMode = true; touchY = e.touches[0].clientY; touchDone = false; lastInput = performance.now(); lockZone(); }, { passive: true });
-      addEventListener('touchmove', e => {
-        if (touchY == null) return;
-        lastInput = performance.now();
-        const dy = touchY - e.touches[0].clientY, dir = Math.sign(dy);
-        if (!dir) return;
-        const locked = root.classList.contains('tess-lock');
-        if (next(dir) == null && !locked) return;                        // outside the tesseract: normal scrolling
-        if (e.cancelable) e.preventDefault();
-        if (touchDone || Math.abs(dy) < 24) return;
-        touchDone = true;
-        if (busy) return;
-        const to = next(dir);
-        if (to != null) go(to);
-        else {                                                           // at either end: glide out of the tesseract
-          const st = stops();
-          go(dir > 0 ? yOf(TC + PC * .45) : st[0] - innerHeight * .9);
-        }
-      }, { passive: false });
-      addEventListener('touchend', () => { touchY = null; }, { passive: true });
-      addEventListener('click', () => { lastInput = 0; }, true);     // a click on a link or room button is a deliberate jump: never catch it
-      addEventListener('keydown', e => {
-        if (e.target.closest && e.target.closest('input,textarea,select,[contenteditable],dialog')) return;
-        const k = e.key, dir = (k === 'ArrowDown' || k === 'PageDown' || (k === ' ' && !e.shiftKey)) ? 1 : (k === 'ArrowUp' || k === 'PageUp' || (k === ' ' && e.shiftKey)) ? -1 : 0;
-        if (dir) { lastInput = performance.now(); step(dir, e); }
-      });
-      // a phone fling that started before the tesseract can carry past a page: catch it on the page it crossed
       addEventListener('scroll', () => {
+        if (freezing) return;
         const y = scrollY;
-        if (!busy && performance.now() - lastInput < (touchMode ? 3500 : 1500)) {
-          const st = stops(), lo = Math.min(lastY, y), hi = Math.max(lastY, y);
-          const crossed = st.slice(1, -1).filter(v => v > lo + 2 && v < hi - 2);
-          if (crossed.length) { const v = y > lastY ? crossed[0] : crossed[crossed.length - 1]; lastY = v; if (touchMode) freeze(v); else window.scrollTo(0, v); lockZone(); return; }
-        }
-        lastY = y;
-        if (touchMode && !busy) lockZone();
+        if (y > hi + 1) hold(hi); else if (y < lo - 1) hold(lo);
       }, { passive: true });
+      addEventListener('wheel', e => {
+        if (e.ctrlKey) return;
+        const now = performance.now();
+        if (now - lastWheel > 220) arm();                                // a fresh flick is a new gesture
+        lastWheel = now;
+        const y = scrollY, d = e.deltaY;
+        // pushing against the wall of this gesture: stay on the page
+        if ((d > 0 && y >= hi - 1) || (d < 0 && y <= lo + 1)) { e.preventDefault(); return; }
+        if (d > 0 && y + d > hi) { e.preventDefault(); hold(hi); }
+        else if (d < 0 && y + d < lo) { e.preventDefault(); hold(lo); }
+      }, { passive: false });
+      let tY = null;
+      addEventListener('touchstart', e => { touchMode = true; tY = e.touches[0].clientY; arm(); }, { passive: true });
+      addEventListener('touchmove', e => {
+        if (tY == null) return;
+        const dy = tY - e.touches[0].clientY, y = scrollY;
+        // finger still pushing into the page that just filled the screen: the page does not move
+        if ((dy > 0 && y >= hi - 1) || (dy < 0 && y <= lo + 1)) { if (e.cancelable) e.preventDefault(); }
+      }, { passive: false });
+      addEventListener('touchend', () => { tY = null; }, { passive: true });
+      addEventListener('keydown', e => { if (/^(Arrow(Up|Down)|Page(Up|Down)| |Home|End)$/.test(e.key)) arm(); });
+      addEventListener('click', free, true);                            // links and room buttons jump freely
     })();
 
     scene(tess, p => {

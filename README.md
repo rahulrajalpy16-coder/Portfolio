@@ -63,5 +63,5 @@ Fixes made:
 ## Publishing on GitHub Pages
 The site is static: `index.html`, `app.js`, `assets/` and `demo/`. In the repository go to Settings, Pages, choose "Deploy from a branch", pick the branch and the root folder, and save. The address will be https://rahulrajalpy16-coder.github.io/Portfolio/
 
-## Tesseract page by page (2026-11-21)
-Inside the tesseract, one swipe, wheel flick or arrow key moves exactly one page, which stops when it fills the screen and waits for the next gesture. A long fling is absorbed instead of running through the whole corridor. Before the first page and after the last one the page scrolls normally. On phones (iPhone included) a finger never scrolls the tesseract natively, so a fling cannot coast through it, and a fling that arrives from above is stopped on the first page it reaches.
+## Tesseract: pages hold (2026-11-21)
+You scroll and swipe through the tesseract freely, and the movement follows your finger or wheel. Every page is a wall for the gesture that reaches it: when a page fills the screen the scroll stops right there, even in the middle of a long fling, and only a new swipe or scroll carries on to the next page. On iPhone the leftover coast of a fling is cancelled at the wall.
