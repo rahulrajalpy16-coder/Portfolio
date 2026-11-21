@@ -62,3 +62,6 @@ Fixes made:
 
 ## Publishing on GitHub Pages
 The site is static: `index.html`, `app.js`, `assets/` and `demo/`. In the repository go to Settings, Pages, choose "Deploy from a branch", pick the branch and the root folder, and save. The address will be https://rahulrajalpy16-coder.github.io/Portfolio/
+
+## Tesseract page by page (2026-11-21)
+Inside the tesseract, one swipe, wheel flick or arrow key moves exactly one page, which stops when it fills the screen and waits for the next gesture. A long fling is absorbed instead of running through the whole corridor. Before the first page and after the last one the page scrolls normally.

@@ -295,6 +295,80 @@ const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
       window.scrollTo({ top: r.top + scrollY + pOf(T) * (r.height - vh), behavior: 'smooth' });
     }));
 
+    /* ---- page by page: inside the tesseract one swipe, wheel flick or key press moves exactly one page.
+       Each page stops when it fills the screen (T = k + .5) and waits for the next gesture.
+       A long trackpad or phone fling is swallowed until it ends, so the corridor never runs start to end at once. */
+    (function stepper() {
+      const yOf = T => { const r = tess.getBoundingClientRect(); return r.top + scrollY + pOf(T) * (r.height - vh); };
+      const stops = () => [yOf(-PRE)].concat(sts.map((_, k) => yOf(k + .5)), [yOf(TC)]);
+      let busy = false, lastWheel = 0, lastInput = 0, lastY = scrollY, touchY = null, touchDone = false;
+      const ease = t => 1 - Math.pow(1 - t, 3);
+      function go(to) {
+        busy = true;
+        const from = scrollY, dist = to - from, dur = Math.min(1300, 650 + Math.abs(dist) * .35), t0 = performance.now();
+        const html = document.documentElement, prev = html.style.scrollBehavior; html.style.scrollBehavior = 'auto';
+        (function f(now) {
+          const t = Math.min(1, (now - t0) / dur);
+          window.scrollTo(0, from + dist * ease(t));
+          if (t < 1) requestAnimationFrame(f);
+          else { html.style.scrollBehavior = prev; lastY = scrollY; setTimeout(() => { busy = false; }, 450); }   // hold the page a moment
+        })(t0);
+      }
+      // the next stop in the direction of travel, or null when the gesture should leave the tesseract normally
+      function next(dir) {
+        const st = stops(), y = scrollY, a = st[0], z = st[st.length - 1];
+        if (y < a - 2 || y > z + 2) return null;                        // not inside the page-by-page stretch
+        if (dir > 0) { if (y >= z - 2) return null; return st.find(v => v > y + 2); }
+        if (y <= a + 2) return null;
+        for (let i = st.length - 1; i >= 0; i--) if (st[i] < y - 2) return st[i];
+        return null;
+      }
+      function step(dir, e) {
+        const to = next(dir);
+        if (to == null) return false;
+        if (e && e.cancelable) e.preventDefault();
+        if (!busy) go(to);
+        return true;
+      }
+      addEventListener('wheel', e => {
+        if (e.ctrlKey || Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
+        const now = performance.now(), gap = now - lastWheel; lastWheel = lastInput = now;
+        const dir = Math.sign(e.deltaY); if (!dir) return;
+        const to = next(dir);
+        if (to == null) return;
+        e.preventDefault();
+        // one gesture = one page: the tail of a long fling keeps arriving, so only a fresh flick (after a short pause) moves on
+        if (!busy && gap > 220) go(to);
+      }, { passive: false });
+      addEventListener('touchstart', e => { touchY = e.touches[0].clientY; touchDone = false; lastInput = performance.now(); }, { passive: true });
+      addEventListener('touchmove', e => {
+        if (touchY == null) return;
+        lastInput = performance.now();
+        const dy = touchY - e.touches[0].clientY, dir = Math.sign(dy);
+        if (!dir) return;
+        if (next(dir) == null) return;                                   // at the edges, let the page scroll on
+        if (e.cancelable) e.preventDefault();
+        if (!touchDone && Math.abs(dy) > 24) { touchDone = true; step(dir); }
+      }, { passive: false });
+      addEventListener('touchend', () => { touchY = null; }, { passive: true });
+      addEventListener('click', () => { lastInput = 0; }, true);     // a click on a link or room button is a deliberate jump: never catch it
+      addEventListener('keydown', e => {
+        if (e.target.closest && e.target.closest('input,textarea,select,[contenteditable],dialog')) return;
+        const k = e.key, dir = (k === 'ArrowDown' || k === 'PageDown' || (k === ' ' && !e.shiftKey)) ? 1 : (k === 'ArrowUp' || k === 'PageUp' || (k === ' ' && e.shiftKey)) ? -1 : 0;
+        if (dir) { lastInput = performance.now(); step(dir, e); }
+      });
+      // a phone fling that started before the tesseract can carry past a page: catch it on the page it crossed
+      addEventListener('scroll', () => {
+        const y = scrollY;
+        if (!busy && performance.now() - lastInput < 1500) {
+          const st = stops(), lo = Math.min(lastY, y), hi = Math.max(lastY, y);
+          const crossed = st.slice(1, -1).filter(v => v > lo + 2 && v < hi - 2);
+          if (crossed.length) { const v = y > lastY ? crossed[0] : crossed[crossed.length - 1]; lastY = v; window.scrollTo(0, v); return; }
+        }
+        lastY = y;
+      }, { passive: true });
+    })();
+
     scene(tess, p => {
       const T = p * U - PRE;
       const q = range(T, TC, TC + PC), s = range(T, TC + PC, TC + PC + PL);
