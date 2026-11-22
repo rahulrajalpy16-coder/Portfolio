@@ -7,7 +7,7 @@
    ========================================================= */
 
 /* Fill these in before publishing. Empty fields are left out of the contact list. */
-const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
+const CONTACT = { email: 'info@timewalker.tech', phone: '+971 56 863 4639', whatsapp: '971568634639', place: 'UAE', linkedin: '', github: '' };
 
 (() => {
   const html = document.documentElement;
@@ -32,6 +32,8 @@ const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
     const list = $('#clist'), msg = $('#cmsg');
     const rows = [
       ['Email', CONTACT.email && `<a href="mailto:${CONTACT.email}">${CONTACT.email}</a>`],
+      ['Phone', CONTACT.phone && `<a href="tel:${CONTACT.phone.replace(/\s/g, '')}">${CONTACT.phone}</a>`],
+      ['WhatsApp', CONTACT.whatsapp && `<a href="https://wa.me/${CONTACT.whatsapp}" target="_blank" rel="noopener">Message on WhatsApp</a>`],
       ['Based in', CONTACT.place],
       ['LinkedIn', CONTACT.linkedin && `<a href="${CONTACT.linkedin}" target="_blank" rel="noopener">${CONTACT.linkedin.replace(/^https?:\/\/(www\.)?/, '')}</a>`],
       ['GitHub', CONTACT.github && `<a href="${CONTACT.github}" target="_blank" rel="noopener">${CONTACT.github.replace(/^https?:\/\/(www\.)?/, '')}</a>`],
