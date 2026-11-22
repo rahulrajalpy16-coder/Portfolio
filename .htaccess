@@ -1,0 +1,31 @@
+# timewalker.tech on Hostinger
+DirectoryIndex index.html
+Options -Indexes
+
+# file types the site uses
+AddType image/webp .webp
+AddType video/mp4 .mp4
+AddType model/gltf-binary .glb
+AddType application/javascript .js
+
+# images, film frames and the 3D logo rarely change: let browsers keep them
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType image/webp "access plus 30 days"
+  ExpiresByType video/mp4 "access plus 30 days"
+  ExpiresByType model/gltf-binary "access plus 30 days"
+  ExpiresByType application/javascript "access plus 1 hour"
+  ExpiresByType text/html "access plus 0 seconds"
+</IfModule>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css application/javascript image/svg+xml
+</IfModule>
+
+# Send everyone to https once the free SSL certificate is active in hPanel.
+# Turning on "Force HTTPS" in hPanel does the same; you only need one of them.
+# <IfModule mod_rewrite.c>
+#   RewriteEngine On
+#   RewriteCond %{HTTPS} off
+#   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+# </IfModule>
