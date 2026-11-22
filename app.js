@@ -513,27 +513,41 @@ const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
       const RX = [[0, 0], [.048, .3], [.072, .37], [.145, .47], [.29, .45], [.43, .47], [.506, .66], [.58, .74], [.72, .69], [.8, .75], [1, .75]];
       const runnerAt = t => { for (let i = 1; i < RX.length; i++) if (t <= RX[i][0]) { const [t0, a] = RX[i - 1], [t1, b] = RX[i]; return a + (b - a) * (t - t0) / (t1 - t0); } return .75; };
       let runSeq = null, runP = 0, rW = 0, rH = 0, rLast = null, rLastKey = '';
-      const F0 = 4;                                                     // the first frames are him entering an empty stage: start once he is in
-      const runFrame = () => Math.round(F0 + range(runP, .07, .86) * (RUN_N - 1 - F0));
+      // the whole clip plays: he runs in from the left edge, sprints through the streaks and lands; then he is gone off the right edge
+      const runFrame = () => Math.round(range(runP, .05, .66) * (RUN_N - 1));
       const runT = () => runFrame() / (RUN_N - 1);
+      const runExit = () => { const e = range(runP, .72, .84); return e * e * e; };   // accelerates out
       function drawRun(force) {
         if (!runSeq || !rW) return;
-        const t = runT(), im = runSeq.pick(runFrame());
+        const t = runT(), ex = runExit(), im = runSeq.pick(runFrame());
         if (!im) return;
-        const key = rW + 'x' + rH + ':' + t.toFixed(4);
+        const key = rW + 'x' + rH + ':' + t.toFixed(4) + ':' + ex.toFixed(4);
         if (!force && im === rLast && key === rLastKey) return;
         rLast = im; rLastKey = key;
         const iw = im.naturalWidth, ih = im.naturalHeight;
         let sc, x, y;
         if (rW / rH >= 1.1) { sc = Math.max(rW / iw, rH / ih); x = (rW - iw * sc) / 2; y = (rH - ih * sc) / 2; }
         else {
-          // tall screens: a closer crop that follows him across the frame
+          // tall screens: a closer crop, and the picture slides so he still crosses the screen from the left edge
           sc = Math.max(rW / iw * 1.75, rH * .42 / ih);
-          const win = rW / (iw * sc), left = clamp(runnerAt(t) - win / 2, 0, 1 - win);
-          x = -left * iw * sc; y = (rH - ih * sc) * .5;
+          const r = runnerAt(t), D = .08 + r * .7;
+          x = D * rW - r * iw * sc; y = (rH - ih * sc) * .5;
         }
-        rcx.fillStyle = '#020203'; rcx.fillRect(0, 0, rW, rH);
-        rcx.drawImage(im, x, y, iw * sc, ih * sc);
+        const W = iw * sc, H = ih * sc, dx = ex * rW * 1.35;
+        rcx.globalAlpha = 1; rcx.fillStyle = '#020203'; rcx.fillRect(0, 0, rW, rH);
+        if (ex > 0) {                                    // a motion trail behind him as he whips off to the right
+          for (let g = 4; g >= 1; g--) { rcx.globalAlpha = .14 * (1 - g / 5); rcx.drawImage(im, x + dx - g * ex * rW * .09, y, W, H); }
+          rcx.globalAlpha = 1;
+        }
+        rcx.drawImage(im, x + dx, y, W, H);
+        // soften the picture's own edges into the black stage wherever they are on screen
+        const fw = W * .12, L = x + dx, R = L + W;
+        if (L > -fw) {
+          if (L > 0) { rcx.fillStyle = '#020203'; rcx.fillRect(0, 0, L, rH); }
+          const g = rcx.createLinearGradient(L, 0, L + fw, 0); g.addColorStop(0, '#020203'); g.addColorStop(1, 'rgba(2,2,3,0)');
+          rcx.fillStyle = g; rcx.fillRect(L, 0, fw, rH);
+        }
+        if (R < rW + fw) { const g = rcx.createLinearGradient(R - fw, 0, R, 0); g.addColorStop(0, 'rgba(2,2,3,0)'); g.addColorStop(1, '#020203'); rcx.fillStyle = g; rcx.fillRect(R - fw, 0, fw, rH); if (R < rW) { rcx.fillStyle = '#020203'; rcx.fillRect(R, 0, rW - R, rH); } }
       }
       function sizeRun() {
         const dpr = Math.min(devicePixelRatio || 1, 1.5);
@@ -548,11 +562,12 @@ const CONTACT = { email: '', place: 'UAE', linkedin: '', github: '' };
       scene(run, p => {
         runP = p;
         run.style.setProperty('--ro', (1 - easeOut(range(p, 0, .12))).toFixed(4));
-        run.style.setProperty('--rz', easeInOut(range(p, .86, 1)).toFixed(4));
-        run.style.setProperty('--rx', range(p, .9, 1).toFixed(4));
-        runTag.style.setProperty('--tg', (range(p, .08, .2) * (1 - range(p, .84, .94))).toFixed(3));
-        runWord.style.setProperty('--w1', (easeOut(range(p, .52, .68)) * (1 - range(p, .9, 1))).toFixed(3));
-        runWord.style.setProperty('--w2', (easeOut(range(p, .6, .76)) * (1 - range(p, .9, 1))).toFixed(3));
+        run.style.setProperty('--rz', easeInOut(range(p, .9, 1)).toFixed(4));
+        run.style.setProperty('--rx', range(p, .94, 1).toFixed(4));
+        runTag.style.setProperty('--tg', (range(p, .08, .2) * (1 - range(p, .66, .74))).toFixed(3));
+        // once he has gone, the words land on the empty stage
+        runWord.style.setProperty('--w1', (easeOut(range(p, .78, .88)) * (1 - range(p, .95, 1))).toFixed(3));
+        runWord.style.setProperty('--w2', (easeOut(range(p, .82, .92)) * (1 - range(p, .95, 1))).toFixed(3));
         drawRun();
       });
     }
