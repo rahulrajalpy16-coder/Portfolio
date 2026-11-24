@@ -285,7 +285,123 @@ const CONTACT = { email: 'info@timewalker.tech', phone: '+971 56 863 4639', what
     }
     addEventListener('resize', sizeIris);
     requestAnimationFrame(sizeIris);
-    scene(hero, p => {
+    /* the wormhole: the fall through space ends in a lensed sphere that swallows you, a tunnel, then the tesseract */
+    const WSPLIT = .66;                                         // the first two thirds of the hero are the old timeline
+    const wcv = $('.worm-cv', hero);
+    const big = $('.big', iris);
+    let worm = null, wormW = 0, wormRaf = 0;
+    function buildWorm() {
+      let g;
+      try { g = wcv.getContext('webgl', { premultipliedAlpha: true, alpha: true, antialias: false }); } catch (e) { g = null; }
+      if (!g) return null;
+      const vs = 'attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}';
+      const fs = `precision highp float;
+        uniform vec2 uRes; uniform float uT, uR, uTun, uA, uFlash;
+        float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+        float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y);}
+        float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*n(p);p*=2.02;a*=.5;}return v;}
+        vec3 stars(vec2 q){
+          vec3 c=vec3(0.);
+          for(int l=0;l<3;l++){
+            float s=55.+float(l)*65.; vec2 g=floor(q*s), f=fract(q*s)-.5; float r=h(g+float(l)*7.);
+            float d=length(f-(vec2(h(g+1.3),h(g+2.7))-.5)*.6);
+            float b=step(.962,r)*smoothstep(.13,.0,d)*(.45+.55*h(g+5.));
+            c+=b*mix(vec3(1.,.9,.78),vec3(.68,.8,1.),h(g+9.));
+          }
+          float m=fbm(q*2.2+3.);
+          c+=vec3(.08,.10,.28)*m*m+vec3(.16,.05,.22)*pow(fbm(q*1.3-7.),3.)*.9;
+          return c;
+        }
+        vec3 far(vec2 q){                                        // the far side: another galaxy, squeezed towards the rim like a fisheye
+          float rr=length(q);
+          vec2 w=q/max(.08,1.-rr*rr*.85);
+          vec3 c=stars(w*.9+vec2(4.1,1.3))*1.6;
+          float nb=fbm(w*1.6+vec2(uT*.03,0.));
+          c+=vec3(1.,.55,.25)*pow(nb,2.2)*.9+vec3(.5,.25,.6)*pow(fbm(w*2.7-3.),3.)*.6;
+          vec2 gq=mat2(.9,-.44,.44,.9)*(w-vec2(.12,.05)); float gd=length(gq*vec2(1.,3.4));
+          c+=vec3(1.,.82,.6)*(exp(-gd*gd*3.)*1.1+exp(-gd*gd*40.)*1.4);
+          vec2 a=abs(fract(w*1.2+vec2(0.,uT*.05))-.5);          // a faint hint of the lattice waiting beyond
+          c+=vec3(1.,.55,.22)*smoothstep(.03,0.,min(a.x,a.y))*.1*(1.-rr);
+          return c;
+        }
+        vec2 tun(float a,float d,float z){
+          return vec2(fbm(vec2(a*3.183+d*.1,z*.55)),pow(n(vec2(a*15.92,z*.9)),5.)*2.2+pow(n(vec2(a*31.83+7.,z*.6)),9.)*2.);
+        }
+        void main(){
+          vec2 p=(gl_FragCoord.xy-.5*uRes)/min(uRes.x,uRes.y);
+          float r=length(p), R=uR;
+          vec3 col;
+          if(r>R){
+            float E=R*1.12; vec2 dir=p/max(r,1e-4);
+            vec2 sp=dir*(r-E*E/r);                                  // light bent around the throat (point-mass lens)
+            col=stars(sp+vec2(.31,.17)+uT*.004);
+            float ring=exp(-pow((r-R)/(R*.05+.002),2.));
+            col+=vec3(.72,.84,1.)*ring*1.1;
+            col*=1.+.7*exp(-pow((r-E)/(R*.4+.001),2.));
+          } else {
+            vec2 q=p/R; float rr=length(q);
+            float rim=smoothstep(.7,1.,rr);
+            vec3 sky=stars(normalize(q+1e-5)*(1.-rr)*R*7.+uT*.01)*1.5+vec3(.45,.55,.95)*.06;
+            col=mix(far(q),sky,rim*.85)+vec3(.9,.95,1.)*pow(rr,16.)*.9;
+          }
+          if(uTun>0.){
+            float a=atan(p.y,p.x), d=.32/max(r,.015), z=d+uT*2.4;
+            float a2=a<0.?a+6.28318:a, k=smoothstep(2.3,3.1,abs(a));   // atan jumps at the back: blend a second copy over the seam
+            vec2 ss=mix(tun(a,d,z),tun(a2,d,z),k); float s1=ss.x, s2=ss.y;
+            vec3 tc=mix(vec3(.22,.32,.95),vec3(1.,.58,.28),smoothstep(.35,.75,s1))*(s1*1.1+s2);
+            tc*=smoothstep(.0,.3,r);
+            tc+=vec3(1.,.82,.58)*exp(-r*r*36.)*1.1;
+            col=mix(col,tc,uTun);
+          }
+          col+=vec3(1.,.93,.84)*uFlash;
+          col=1.-exp(-col*1.35);
+          gl_FragColor=vec4(col*uA,uA);
+        }`;
+      const sh = (t, src) => { const o = g.createShader(t); g.shaderSource(o, src); g.compileShader(o); return g.getShaderParameter(o, g.COMPILE_STATUS) ? o : null; };
+      const v = sh(g.VERTEX_SHADER, vs), f = sh(g.FRAGMENT_SHADER, fs);
+      if (!v || !f) return null;
+      const pr = g.createProgram(); g.attachShader(pr, v); g.attachShader(pr, f); g.linkProgram(pr);
+      if (!g.getProgramParameter(pr, g.LINK_STATUS)) return null;
+      g.useProgram(pr);
+      const buf = g.createBuffer(); g.bindBuffer(g.ARRAY_BUFFER, buf);
+      g.bufferData(g.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), g.STATIC_DRAW);
+      const loc = g.getAttribLocation(pr, 'a'); g.enableVertexAttribArray(loc); g.vertexAttribPointer(loc, 2, g.FLOAT, false, 0, 0);
+      const U = {}; ['uRes', 'uT', 'uR', 'uTun', 'uA', 'uFlash'].forEach(k => U[k] = g.getUniformLocation(pr, k));
+      return {
+        draw(w, t) {
+          const dpr = Math.min(devicePixelRatio || 1, TOUCH ? 1 : 1.25);
+          const W = Math.round(wcv.clientWidth * dpr), H = Math.round(wcv.clientHeight * dpr);
+          if (wcv.width !== W || wcv.height !== H) { wcv.width = W; wcv.height = H; }
+          g.viewport(0, 0, W, H);
+          g.uniform2f(U.uRes, W, H); g.uniform1f(U.uT, t);
+          g.uniform1f(U.uR, .035 + Math.pow(range(w, .06, .64), 2.6) * 1.7);
+          g.uniform1f(U.uTun, easeInOut(range(w, .5, .78)));
+          g.uniform1f(U.uA, range(w, 0, .1) * (1 - easeInOut(range(w, .9, 1))));
+          g.uniform1f(U.uFlash, range(w, .8, .9) * (1 - range(w, .9, .97)) * 1.15);
+          g.clearColor(0, 0, 0, 0); g.clear(g.COLOR_BUFFER_BIT);
+          g.drawArrays(g.TRIANGLES, 0, 3);
+        }
+      };
+    }
+    function wormLoop(now) {
+      wormRaf = 0;
+      const r = hero.getBoundingClientRect();
+      if (wormW <= 0 || wormW >= 1 || r.bottom < 0) return;
+      if (!worm) worm = buildWorm();
+      if (!worm) return;
+      worm.draw(wormW, now * .001);
+      wormRaf = requestAnimationFrame(wormLoop);
+    }
+    scene(hero, pRaw => {
+      const p = Math.min(1, pRaw / WSPLIT), w = range(pRaw, WSPLIT, 1);
+      wormW = w;
+      iris.style.setProperty('--wf', range(w, 0, .12).toFixed(3));
+      big.style.visibility = w > .14 ? 'hidden' : '';
+      hero.classList.toggle('thru', w > .9);
+      if (w > 0 && w < 1 && !wormRaf) wormRaf = requestAnimationFrame(wormLoop);
+      if ((w <= 0 || w >= 1) && worm) worm.draw(w, 0);
+      window.__wormEnd = w;
+      if (w > .85) glKick();
       const a = easeInOut(range(p, 0, .5));
       const spread = vw < 720 ? 60 : 34;
       // RAHUL drifts left, RAJ drifts right
@@ -403,7 +519,7 @@ const CONTACT = { email: 'info@timewalker.tech', phone: '+971 56 863 4639', what
     let nItem = 0;
     const side = sts.map(st => st.classList.contains('tcard') ? 0 : (nItem++ % 2 ? 1 : -1));
     // which frozen frame on the wall belongs to each item (tiles of the wall atlas, see drawAtlas)
-    const WORK_TILES = [0, 1, 3, 4, 5];
+    const WORK_TILES = [0, 1, 2, 3, 4, 5];
     const tileOf = k => side[k] === 0 ? -1 : k < WT ? 5 + k : WORK_TILES[k - WT - 1];
     const endT = TC + PC + PL * .97;
     function placeAnchors() {
@@ -724,12 +840,31 @@ const CONTACT = { email: 'info@timewalker.tech', phone: '+971 56 863 4639', what
     /* ---------- WebGL: three.js r128 from cdnjs, loaded after the page ---------- */
     let gl = null, glRunning = false;
     function glKick() { if (gl && !glRunning) { glRunning = true; requestAnimationFrame(glFrame); } }
+    // the backdrop: from the wormhole on, the same corridor sits behind every chapter, drifting slowly towards the tesseract
+    const tbg = $('.tbg'), heroSec = $('.hero');
+    const PRE_C = -5.5, C0 = cOf(-PRE);
+    let cpS = PRE_C;
     function glFrame(now) {
-      const r = tess.getBoundingClientRect();
-      if (r.bottom < -40 || r.top > vh + 40) { glRunning = false; return; }
+      const r = tess.getBoundingClientRect(), hr = heroSec.getBoundingClientRect();
+      const span = hr.height - vh, wNow = span > 0 ? range(-hr.top / span, WSPLIT, 1) : 1;
+      const zone = html.classList.contains('tbd') && r.bottom > -40 && (wNow > .88 || hr.bottom < vh * .5);
+      if (tbg) tbg.style.setProperty('--tbv', zone ? 'visible' : 'hidden');
+      if (!zone && (r.bottom < -40 || r.top > vh + 40)) { glRunning = false; return; }
+      if (r.top > 0) {
+        const yA = scrollY + hr.top + span * (WSPLIT + (1 - WSPLIT) * .9), yB = scrollY + r.top;
+        const target = PRE_C + (C0 - PRE_C) * range(scrollY, yA, yB);
+        cpS += (target - cpS) * .1;
+        S.cp = cpS;
+        const dim = .62 * range(scrollY, yA + vh * .15, yA + vh) * (1 - range(scrollY, yB - vh * .9, yB));
+        if (tbg) tbg.style.setProperty('--tdim', dim.toFixed(3));
+      } else {
+        S.cp = null; cpS = C0;
+        if (tbg) tbg.style.setProperty('--tdim', '0');
+      }
       gl.draw(now);
       requestAnimationFrame(glFrame);
     }
+    addEventListener('scroll', glKick, { passive: true });
     function hash(n) { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
 
     /* the frozen frames on the walls: 12 tiles of 512 x 320, painted from the work itself */
@@ -828,10 +963,9 @@ const CONTACT = { email: 'info@timewalker.tech', phone: '+971 56 863 4639', what
         g.fillStyle = PA; g.font = '800 26px sans-serif'; g.fillText('Chain', 280, 120); g.fillText('Reaction', 280, 152);
         g.fillStyle = OR; g.font = '600 15px ui-monospace,monospace'; g.fillText('● LIVE APP', 280, 186);
       }));
-      img('assets/chain-reaction-board.webp', im => at(2, () => {
-        const h = TH - 24, w = im.naturalWidth * h / im.naturalHeight;
-        g.drawImage(im, 40, 12, w, h);
-        g.fillStyle = MU; g.font = '600 14px ui-monospace,monospace'; g.fillText('2 TO 8 PLAYERS', 230, 150); g.fillText('WORKS OFFLINE', 230, 176);
+      img('assets/vessel-sim.webp', im => at(2, () => {
+        const s = Math.max(TW / im.naturalWidth, TH / im.naturalHeight);
+        g.drawImage(im, (TW - im.naturalWidth * s) / 2, (TH - im.naturalHeight * s) / 2, im.naturalWidth * s, im.naturalHeight * s);
       }));
       img('assets/rahul-anime.webp', im => at(10, () => {
         g.fillStyle = 'rgba(255,122,46,.22)'; g.font = '800 120px sans-serif'; g.fillText('RAHUL', 20, 150); g.fillText('RAJ', 20, 270);
@@ -855,7 +989,7 @@ const CONTACT = { email: 'info@timewalker.tech', phone: '+971 56 863 4639', what
       // `walls` is built in world units and rebuilt on resize, so the frames keep their shape.
       const world = new THREE.Group(), walls = new THREE.Group();
       scene3.add(world, walls);
-      const Z0 = 40, Z1 = -(NST + 9) * D;
+      const Z0 = 40 + (-PRE_C) * D, Z1 = -(NST + 9) * D;      // the corridor starts further back: it is the backdrop from the wormhole on
 
       /* 1 · the lattice: thin glowing beams on all three axes, brighter near the corridor */
       const XS = [1, 2.2, 3.4, 4.6], pos = [], col = [];
@@ -874,7 +1008,7 @@ const CONTACT = { email: 'info@timewalker.tech', phone: '+971 56 863 4639', what
       world.add(new THREE.LineSegments(lg, new THREE.LineBasicMaterial({ vertexColors: true })));
 
       /* 2 · strands: thousands of thin threads, the time lines */
-      const sp = [], sc = [], NS = mob ? 1400 : 2800;
+      const sp = [], sc = [], NS = mob ? 1800 : 3600;
       for (let n = 0; n < NS; n++) {
         const z = Z0 + Math.random() * (Z1 - Z0), a = Math.random();
         const out = 1.05 + Math.random() * 3.4, sd = Math.random() < .5 ? -1 : 1;
@@ -889,7 +1023,7 @@ const CONTACT = { email: 'info@timewalker.tech', phone: '+971 56 863 4639', what
       sg.setAttribute('color', new THREE.Float32BufferAttribute(sc, 3));
       const strands = new THREE.LineSegments(sg, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
       world.add(strands);
-      const dp = [], ND = mob ? 700 : 1500;
+      const dp = [], ND = mob ? 900 : 1900;
       for (let n = 0; n < ND; n++) dp.push((Math.random() * 2 - 1) * 1.6, (Math.random() * 2 - 1) * 1.6, Z0 + Math.random() * (Z1 - Z0));
       const dg = new THREE.BufferGeometry(); dg.setAttribute('position', new THREE.Float32BufferAttribute(dp, 3));
       const dust = new THREE.Points(dg, new THREE.PointsMaterial({ color: 0xFFB070, size: .07, transparent: true, opacity: .7, blending: THREE.AdditiveBlending, depthWrite: false }));
@@ -1072,7 +1206,7 @@ const CONTACT = { email: 'info@timewalker.tech', phone: '+971 56 863 4639', what
       addEventListener('pointermove', e => { mx = e.clientX / vw - .5; my = e.clientY / vh - .5; }, { passive: true });
       return {
         draw(now) {
-          const t = now * .001, { c, q, s } = S;
+          const t = now * .001, { q, s } = S, c = S.cp != null ? S.cp : S.c;
           if (s > .02) return;                                   // the lens scene covers everything from here
           renderer.clear();
           const f = c - Math.floor(c), warp = q > 0 ? 0 : Math.sin(Math.PI * f) * (c > -.5 ? 1 : 0);
@@ -1120,7 +1254,11 @@ const CONTACT = { email: 'info@timewalker.tech', phone: '+971 56 863 4639', what
       document.head.appendChild(sc);
       function start() {
         try { gl = buildGL(); } catch (e) { console.warn(e); gl = null; }
-        if (gl) { tess.classList.add('gl-on'); markDirty(); glKick(); }
+        if (gl) {
+          tess.classList.add('gl-on');
+          if (tbg) { tbg.appendChild($('.tess-gl', tess)); html.classList.add('tbd'); }
+          markDirty(); glKick();
+        }
       }
     }
     if (document.readyState === 'complete') setTimeout(loadThree, 200);
@@ -1148,9 +1286,9 @@ const CONTACT = { email: 'info@timewalker.tech', phone: '+971 56 863 4639', what
           m2.style.transform = `translate3d(${((1 - e2) * 14).toFixed(2)}vw,0,0)`;
           m3.style.transform = 'none';
         } else {
-          m1.style.transform = `translate3d(${(-8 - v * 34).toFixed(2)}vw,0,0)`;
-          m2.style.transform = `translate3d(${(-50 + v * 34).toFixed(2)}vw,0,0)`;
-          m3.style.transform = `translate3d(${(-v * 30).toFixed(2)}vw,0,0)`;
+          const e1 = easeOut(range(v, .05, .4)), e2 = easeOut(range(v, .1, .46)); m1.style.transform = `translate3d(${(-(1 - e1) * 10).toFixed(2)}vw,0,0)`;
+          m2.style.transform = `translate3d(${((1 - e2) * 10).toFixed(2)}vw,0,0)`;
+          m3.style.transform = 'none';
         }
         m1.style.fontVariationSettings = `"wght" ${Math.round(250 + easeInOut(range(v, .1, .6)) * 550)},"wdth" 100`;
         m2.style.fontVariationSettings = `"wght" 800,"wdth" ${Math.round(100 - easeInOut(range(v, .3, .8)) * 25)}`;
